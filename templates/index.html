@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>线程池管理器</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        .status-running { color: #198754; }
+        .status-pending { color: #0d6efd; }
+        .status-completed { color: #6c757d; }
+        .status-failed { color: #dc3545; }
+        .status-cancelled { color: #fd7e14; }
+        
+        .card-header {
+            cursor: pointer;
+        }
+        
+        .progress-bar-animated {
+            transition: width 0.3s ease;
+        }
+        
+        .task-item {
+            border-left: 3px solid #dee2e6;
+            margin-bottom: 0.5rem;
+            padding-left: 1rem;
+        }
+        
+        .task-item.running {
+            border-left-color: #198754;
+        }
+        
+        .task-item.completed {
+            border-left-color: #6c757d;
+        }
+        
+        .task-item.failed {
+            border-left-color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i class="bi bi-cpu"></i> 线程池管理器
+            </span>
+            <button class="btn btn-outline-light" onclick="refreshData()">
+                <i class="bi bi-arrow-clockwise"></i> 刷新
+            </button>
+        </div>
+    </nav>
+    <!-- 系统统计 -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-graph-up"></i> 系统统计
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h4 id="totalPools" class="text-primary">-</h4>
+                                    <p class="text-muted">线程池数量</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h4 id="totalTasks" class="text-info">-</h4>
+                                    <p class="text-muted">总任务数</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h4 id="activeTasks" class="text-warning">-</h4>
+                                    <p class="text-muted">活跃任务</p>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <h4 id="completedTasks" class="text-success">-</h4>
+                                    <p class="text-muted">已完成任务</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="container-fluid mt-3">
+        <div class="row">
+            <!-- 左侧：线程池管理 -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-collection"></i> 线程池管理
+                        </h5>
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createPoolModal">
+                            <i class="bi bi-plus"></i> 创建线程池
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="poolsContainer">
+                            <div class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">加载中...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：任务管理 -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-list-task"></i> 任务管理
+                        </h5>
+                        <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#submitTaskModal">
+                            <i class="bi bi-plus"></i> 提交任务
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <select class="form-select" id="poolFilter" onchange="filterTasks()">
+                                <option value="">所有线程池</option>
+                            </select>
+                        </div>
+                        <div id="tasksContainer">
+                            <div class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">加载中...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="paginationContainer" class="mt-4">
+                            <!-- 分页组件将在这里渲染 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        
+
+    <!-- 创建线程池模态框 -->
+    <div class="modal fade" id="createPoolModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">创建线程池</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createPoolForm">
+                        <div class="mb-3">
+                            <label class="form-label">线程池名称</label>
+                            <input type="text" class="form-control" name="name" placeholder="可选，留空自动生成">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">最大线程数</label>
+                            <input type="number" class="form-control" name="max_workers" value="5" min="1" max="50">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="createPool()">创建</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提交任务模态框 -->
+    <div class="modal fade" id="submitTaskModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">提交任务</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="submitTaskForm">
+                        <div class="mb-3">
+                            <label class="form-label">选择线程池</label>
+                            <select class="form-select" name="pool_id" id="taskPoolSelect" required>
+                                <option value="">请选择线程池</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">任务名称</label>
+                            <input type="text" class="form-control" name="task_name" placeholder="可选，留空自动生成">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">任务类型</label>
+                            <select class="form-select" name="task_type">
+                                <option value="demo">演示任务</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">执行时间（秒）</label>
+                            <input type="number" class="form-control" name="duration" value="5" min="1" max="60">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="submitTask()">提交</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Dropdown Utils -->
+    <script src="/static/js/dropdown-utils.js"></script>
+    <!-- App JS -->
+    <script src="/static/js/app.js"></script>
+    <!-- 页面初始化 -->
+    <script>
+        $(document).ready(function() {
+            // 初始化线程池选择框
+            if (typeof DropdownUtils !== 'undefined') {
+                DropdownUtils.loadPoolsForTaskModal();
+            }
+        });
+    </script>
+    
+
+    
+    
+</body>
+</html>

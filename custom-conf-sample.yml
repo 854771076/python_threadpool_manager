@@ -1,0 +1,38 @@
+# 线程池管理项目配置文件示例
+
+# Flask配置
+flask:
+  host: "0.0.0.0"
+  port: 5000
+  debug: false
+  secret_key: "your-secret-key-change-this"
+
+# 线程池默认配置
+thread_pool:
+  default_max_workers: 10
+  default_pool_name_prefix: "pool"
+  
+# 任务配置
+task:
+  default_task_name_prefix: "task"
+  cleanup_interval_seconds: 300  # 5分钟清理一次完成的任务
+  max_task_history: 1000  # 保留最近1000个任务记录
+
+# 日志配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/app.log"
+  max_file_size: "10MB"
+  backup_count: 5
+
+# 监控配置
+monitoring:
+  enable_metrics: true
+  metrics_interval_seconds: 60
+  
+# 安全配置
+security:
+  enable_authentication: false
+  admin_username: "admin"
+  admin_password: "admin123"  # 生产环境请修改

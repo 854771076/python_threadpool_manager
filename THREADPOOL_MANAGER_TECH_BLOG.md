@@ -8,6 +8,8 @@
 
 本文将带你深入了解如何从零开始构建一个企业级的线程池管理系统，涵盖核心架构设计、并发编程实践、Web界面开发以及完整的测试策略。
 
+[项目地址](https://github.com/854771076/python_threadpool_manager/tree/main/src/threadpool_manager)
+
 ## 🎯 核心需求与挑战
 
 ### 原始需求分析

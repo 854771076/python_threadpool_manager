@@ -276,7 +276,7 @@ class ThreadPoolManager:
                 return pool.list_tasks()
             else:
                 # 获取所有任务
-                return [task.get_info() for task in self.tasks.values()]
+                return [task for pool in self.pools.values() for task in pool.list_tasks()]
     
     def cleanup_completed_tasks(self) -> int:
         """
@@ -363,3 +363,57 @@ class ThreadPoolManager:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """上下文管理器出口"""
         self.shutdown()
+    
+    def resize_pool(self, pool_id: str, new_max_workers: int) -> Dict[str, Any]:
+        """
+        动态调整指定线程池的最大工作线程数
+        
+        Args:
+            pool_id: 线程池ID
+            new_max_workers: 新的最大工作线程数
+            
+        Returns:
+            Dict[str, Any]: 调整结果信息
+            
+        Raises:
+            KeyError: 如果线程池不存在
+            ValueError: 如果参数无效
+        """
+        with self._lock:
+            if pool_id not in self.pools:
+                raise KeyError(f"线程池 {pool_id} 不存在")
+            
+            pool = self.pools[pool_id]
+            result = pool.resize(new_max_workers)
+            
+            if result['success']:
+                self.logger.info(
+                    f"成功调整线程池 {pool_id} 大小: "
+                    f"max_workers={new_max_workers}, "
+                    f"migrated_tasks={result.get('migrated_tasks', 0)}, "
+                    f"completed_tasks={result.get('completed_tasks', 0)}"
+                )
+            else:
+                self.logger.error(f"调整线程池 {pool_id} 大小失败: {result['message']}")
+            
+            return result
+    
+    def get_pool_resize_info(self, pool_id: str) -> Dict[str, Any]:
+        """
+        获取线程池调整大小的相关信息
+        
+        Args:
+            pool_id: 线程池ID
+            
+        Returns:
+            Dict[str, Any]: 包含当前状态和调整建议的信息
+            
+        Raises:
+            KeyError: 如果线程池不存在
+        """
+        with self._lock:
+            if pool_id not in self.pools:
+                raise KeyError(f"线程池 {pool_id} 不存在")
+            
+            pool = self.pools[pool_id]
+            return pool.get_resize_info()

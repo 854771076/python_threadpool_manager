@@ -12,7 +12,7 @@ class ThreadPoolManager {
         // 添加分页状态
         this.pagination = {
             current_page: 1,
-            per_page: 10,
+            per_page: 5,
             total_pages: 1,
             has_next: false,
             has_prev: false
@@ -222,20 +222,23 @@ class ThreadPoolManager {
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h6 class="mb-0"><span>${pool.name} </span><span class="badge bg-secondary">${pool.max_workers} 线程</span></h6>
-                            
+                            <h6 class="mb-0">
+                                <span>${pool.name} </span>
+                                <span class="badge bg-secondary">${pool.max_workers} 线程</span>
+                            </h6>
                             <small class="text-muted">ID: ${pool.pool_id}</small>
-                            
                         </div>
                         
                     </div>
                     <div>
-                            
-                            <button class="btn btn-sm btn-danger" onclick="threadPoolManager.closePool('${pool.pool_id}')">
-                                <i class="bi bi-x"></i> 关闭
+                            <button class="btn btn-sm btn-outline-primary" onclick="threadPoolManager.showResizeModal('${pool.pool_id}')">
+                                <i class="bi bi-arrows-angle-expand"></i> 调整大小
                             </button>
-                            <button class="btn btn-sm btn-warning" onclick="threadPoolManager.cancelPoolTasks('${pool.pool_id}')">
-                                <i class="bi bi-x"></i> 取消未执行任务
+                            <button class="btn btn-sm btn-outline-warning" onclick="threadPoolManager.cancelPoolTasks('${pool.pool_id}')">
+                                <i class="bi bi-x"></i> 取消未执行
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="threadPoolManager.closePool('${pool.pool_id}')">
+                                <i class="bi bi-power"></i> 关闭
                             </button>
                         </div>
                 </div>
@@ -275,6 +278,143 @@ class ThreadPoolManager {
         `).join('');
 
         container.innerHTML = poolsHtml;
+    }
+
+    // 显示调整线程池大小模态框
+    async showResizeModal(poolId) {
+        try {
+            const response = await fetch(`/api/pools/${poolId}/resize-info`);
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                const info = result.data;
+                
+                // 创建或更新调整大小模态框
+                let modal = document.getElementById('resizePoolModal');
+                if (!modal) {
+                    modal = this.createResizeModal();
+                }
+                
+                // 填充数据
+                document.getElementById('resizePoolId').value = poolId;
+                document.getElementById('resizePoolName').textContent = info.name;
+                document.getElementById('currentMaxWorkers').textContent = info.current_max_workers;
+                document.getElementById('activeTasks').textContent = info.active_tasks;
+                document.getElementById('suggestedMaxWorkers').textContent = info.suggested_max_workers;
+                
+                // 设置输入框的当前值和建议值
+                const input = document.getElementById('newMaxWorkers');
+                input.value = info.current_max_workers;
+                input.min = 1;
+                input.max = Math.max(100, info.suggested_max_workers * 2);
+                
+                // 显示模态框
+                const bsModal = new bootstrap.Modal(modal);
+                bsModal.show();
+            } else {
+                throw new Error(result.error || '获取调整信息失败');
+            }
+        } catch (error) {
+            console.error('获取调整信息失败:', error);
+            this.showError('获取调整信息失败: ' + error.message);
+        }
+    }
+
+    // 创建调整大小模态框
+    createResizeModal() {
+        const modalHtml = `
+            <div class="modal fade" id="resizePoolModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">调整线程池大小</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="resizePoolForm">
+                                <input type="hidden" id="resizePoolId" value="">
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">线程池名称</label>
+                                    <p class="form-control-plaintext" id="resizePoolName"></p>
+                                </div>
+                                
+                                <div class="row mb-3">
+                                    <div class="col-6">
+                                        <label class="form-label">当前线程数</label>
+                                        <p class="form-control-plaintext" id="currentMaxWorkers"></p>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">活跃任务数</label>
+                                        <p class="form-control-plaintext" id="activeTasks"></p>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">新线程数</label>
+                                    <input type="number" class="form-control" id="newMaxWorkers" min="1" max="100" required>
+                                    <div class="form-text">
+                                        建议值: <span id="suggestedMaxWorkers"></span> (根据活跃任务数计算)
+                                    </div>
+                                </div>
+                                
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i>
+                                    <strong>提示：</strong>调整大小时，未执行的任务会自动迁移到新线程池，正在执行的任务会继续完成。
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                            <button type="button" class="btn btn-primary" onclick="threadPoolManager.resizePool()">调整大小</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        return document.getElementById('resizePoolModal');
+    }
+
+    // 执行调整线程池大小
+    async resizePool() {
+        const poolId = document.getElementById('resizePoolId').value;
+        const newMaxWorkers = parseInt(document.getElementById('newMaxWorkers').value);
+        
+        if (!newMaxWorkers || newMaxWorkers < 1) {
+            this.showError('请输入有效的线程数');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/pools/${poolId}/resize`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ max_workers: newMaxWorkers })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok) {
+                this.showSuccess('线程池大小调整成功');
+                
+                // 关闭模态框
+                const modal = bootstrap.Modal.getInstance(document.getElementById('resizePoolModal'));
+                modal.hide();
+                
+                // 刷新数据
+                await this.loadPools();
+                await this.loadTasks();
+            } else {
+                throw new Error(result.error || '调整线程池大小失败');
+            }
+        } catch (error) {
+            console.error('调整线程池大小失败:', error);
+            this.showError('调整线程池大小失败: ' + error.message);
+        }
     }
 
     renderTasks(tasks) {
@@ -752,6 +892,8 @@ class ThreadPoolManager {
         this.refreshTimer = setInterval(() => {
             this.loadTasks();
             this.loadStats();
+            this.loadPools();
+
         }, this.refreshInterval);
     }
 

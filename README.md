@@ -2,14 +2,18 @@
 
 一个功能强大的Python线程池管理系统，提供线程池和任务的统一管理，包含Web管理界面。
 
+[项目地址](https://github.com/854771076/python_threadpool_manager)
+
 ## 功能特性
 
 - 🎯 **线程池管理**：创建、关闭、强制关闭线程池
 - 📊 **任务管理**：提交、取消、监控任务执行状态
+- 🔄 **动态调整**：运行时调整线程池大小，无需重启
 - 🌐 **Web界面**：基于Bootstrap的响应式管理界面
 - 📈 **实时监控**：实时查看线程池和任务状态
 - 🔧 **配置灵活**：支持自定义配置和扩展
 - 🧪 **完整测试**：包含全面的单元测试
+- 🎛️ **智能建议**：基于负载自动推荐线程数
 
 ## 项目结构
 
@@ -122,6 +126,8 @@ cancelled_tasks = manager.force_close_pool(pool_id)
 
 - `GET /api/pools` - 获取线程池列表
 - `POST /api/pools` - 创建线程池
+- `PUT /api/pools/<pool_id>/resize` - 调整线程池大小
+- `GET /api/pools/<pool_id>/resize-info` - 获取调整信息
 - `DELETE /api/pools/<pool_id>` - 关闭线程池
 - `DELETE /api/pools/<pool_id>/force-close` - 强制关闭线程池
 
@@ -193,7 +199,7 @@ class CustomThreadPool(ManagedThreadPool):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # 自定义初始化
-    
+  
     def custom_method(self):
         # 自定义方法
         pass
@@ -234,6 +240,7 @@ MIT License
 ## 更新日志
 
 ### v1.0.0
+
 - 初始版本发布
 - 完整的线程池管理功能
 - Web管理界面

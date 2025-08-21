@@ -221,6 +221,140 @@ class ManagedThreadPool:
         """上下文管理器入口"""
         return self
     
+    def resize(self, new_max_workers: int) -> Dict[str, Any]:
+        """
+        动态调整线程池最大工作线程数
+        
+        实现逻辑：
+        1. 创建新线程池
+        2. 获取老线程池中未完成的任务
+        3. 优雅关闭老线程池
+        4. 将未完成任务迁移到新线程池
+        5. 更新内部引用
+        
+        Args:
+            new_max_workers: 新的最大工作线程数
+            
+        Returns:
+            Dict[str, Any]: 调整结果信息
+            {
+                'success': bool,  # 是否成功
+                'old_pool_id': str,  # 老线程池ID
+                'new_pool_id': str,  # 新线程池ID
+                'migrated_tasks': int,  # 迁移的任务数量
+                'completed_tasks': int,  # 已完成的任务数量
+                'message': str  # 结果消息
+            }
+        """
+        with self._lock:
+            if self.status != PoolStatus.RUNNING:
+                return {
+                    'success': False,
+                    'message': f"线程池 {self.pool_id} 当前状态为 {self.status.value}，无法调整大小"
+                }
+            
+            if new_max_workers < 1:
+                return {
+                    'success': False,
+                    'message': f"max_workers 必须大于等于 1，当前请求值: {new_max_workers}"
+                }
+            
+            if new_max_workers == self.max_workers:
+                return {
+                    'success': True,
+                    'message': f"线程池 {self.pool_id} 已经是 {new_max_workers} 个工作线程，无需调整"
+                }
+            
+            try:
+                # 获取当前所有任务
+                all_tasks = list(self.tasks.values())
+                
+                # 分类任务状态
+                pending_tasks = [task for task in all_tasks if task.status == TaskStatus.PENDING]
+                running_tasks = [task for task in all_tasks if task.status == TaskStatus.RUNNING]
+                completed_tasks = [task for task in all_tasks if task.is_done()]
+                
+                # 创建新线程池（使用相同的pool_id和name）
+                new_pool = ManagedThreadPool(
+                    pool_id=self.pool_id,
+                    name=self.name,
+                    max_workers=new_max_workers
+                )
+                
+                # 迁移待执行任务
+                migrated_count = 0
+                for task in pending_tasks:
+                    try:
+                        # 重新提交任务到新线程池
+                        new_future = new_pool.executor.submit(task.start)
+                        task.set_future(new_future)
+                        new_pool.tasks[task.task_id] = task
+                        migrated_count += 1
+                    except Exception as e:
+                        # 如果迁移失败，标记任务为失败状态
+                        task.status = TaskStatus.FAILED
+                        task.error = str(e)
+                
+                # 迁移运行中的任务（这些任务会继续在老线程池中完成）
+                for task in running_tasks:
+                    # 运行中的任务不迁移，但保留在任务列表中
+                    new_pool.tasks[task.task_id] = task
+                
+                # 清理已完成的任务
+                cleanup_count = len(completed_tasks)
+                
+                # 优雅关闭老线程池
+                self.executor.shutdown(wait=False)
+                self.status = PoolStatus.TERMINATED
+                
+                # 更新内部引用
+                old_executor = self.executor
+                self.executor = new_pool.executor
+                self.max_workers = new_max_workers
+                self.tasks = new_pool.tasks
+                self.status = PoolStatus.RUNNING
+                
+                # 确保老线程池完全关闭
+                try:
+                    old_executor.shutdown(wait=False)
+                except:
+                    pass
+                
+                return {
+                    'success': True,
+                    'old_pool_id': self.pool_id,
+                    'new_pool_id': new_pool.pool_id,
+                    'migrated_tasks': migrated_count,
+                    'completed_tasks': cleanup_count,
+                    'running_tasks': len(running_tasks),
+                    'message': f"成功调整线程池 {self.pool_id} 大小从 {self.max_workers} 到 {new_max_workers}"
+                }
+                
+            except Exception as e:
+                return {
+                    'success': False,
+                    'message': f"调整线程池大小失败: {str(e)}"
+                }
+    
+    def get_resize_info(self) -> Dict[str, Any]:
+        """
+        获取线程池调整大小的相关信息
+        
+        Returns:
+            Dict[str, Any]: 包含当前状态和调整建议的信息
+        """
+        with self._lock:
+            active_tasks = self.get_active_tasks()
+            return {
+                'pool_id': self.pool_id,
+                'name': self.name,
+                'current_max_workers': self.max_workers,
+                'active_tasks': len(active_tasks),
+                'can_resize': self.status == PoolStatus.RUNNING,
+                'status': self.status.value,
+                'suggested_max_workers': max(1, len(active_tasks) + 2)  # 建议值
+            }
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """上下文管理器出口"""
         self.shutdown(wait=True)

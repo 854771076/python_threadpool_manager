@@ -198,8 +198,7 @@ def submit_task():
         else:
             return jsonify({'success': False, 'error': 'Unsupported task type'}), 400
         
-        task_info = pool_manager.get_task(task_id).get_info()
-        return jsonify({'success': True, 'data': task_info})
+        return jsonify({'success': True})
         
     except PoolNotFoundError as e:
         return jsonify({'success': False, 'error': str(e)}), 404
@@ -251,6 +250,99 @@ def not_found(error):
 def internal_error(error):
     return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
+
+
+@app.route('/api/pools/<pool_id>/resize', methods=['PUT'])
+def resize_pool(pool_id):
+    """
+    动态调整线程池大小
+    
+    请求体:
+    {
+        "max_workers": 10  # 新的最大工作线程数
+    }
+    
+    返回:
+    {
+        "success": true,
+        "message": "调整成功",
+        "data": {调整结果详情}
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data or 'max_workers' not in data:
+            return jsonify({
+                'success': False,
+                'error': '缺少必要参数: max_workers'
+            }), 400
+        
+        new_max_workers = int(data['max_workers'])
+        
+        # 调用线程池管理器调整大小
+        result = pool_manager.resize_pool(pool_id, new_max_workers)
+        
+        return jsonify({
+            'success': result['success'],
+            'message': result['message'],
+            'data': result
+        })
+        
+    except KeyError as e:
+        return jsonify({
+            'success': False,
+            'error': f'线程池不存在: {str(e)}'
+        }), 404
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': f'参数错误: {str(e)}'
+        }), 400
+    except Exception as e:
+        logger.error(f"Error resizing pool {pool_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'调整线程池大小失败: {str(e)}'
+        }), 500
+
+@app.route('/api/pools/<pool_id>/resize-info', methods=['GET'])
+def get_pool_resize_info(pool_id):
+    """
+    获取线程池调整大小的相关信息
+    
+    返回:
+    {
+        "success": true,
+        "data": {
+            "pool_id": "pool-1",
+            "name": "测试线程池",
+            "current_max_workers": 5,
+            "active_tasks": 3,
+            "can_resize": true,
+            "status": "running",
+            "suggested_max_workers": 5
+        }
+    }
+    """
+    try:
+        info = pool_manager.get_pool_resize_info(pool_id)
+        return jsonify({
+            'success': True,
+            'data': info
+        })
+        
+    except KeyError as e:
+        return jsonify({
+            'success': False,
+            'error': f'线程池不存在: {str(e)}'
+        }), 404
+    except Exception as e:
+        logger.error(f"Error getting resize info for pool {pool_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'获取调整信息失败: {str(e)}'
+        }), 500
+
 # 应用生命周期
 with app.app_context():
     logger.info("ThreadPoolManager Web应用启动")
@@ -260,18 +352,19 @@ with app.app_context():
         default_pool_id = pool_manager.create_pool("default", 5)
         logger.info(f"Created default pool: {default_pool_id}")
     except PoolAlreadyExistsError:
-        logger.info("Default pool already exists")
+        logger.warning("Default pool already exists")
+    except Exception as e:
+        logger.error(f"Error creating default pool: {e}")
 
-# 清理资源
-import atexit
 
-@atexit.register
-def cleanup():
-    """应用退出时清理资源"""
-    logger.info("正在关闭应用...")
-    pool_manager.shutdown()
 
 if __name__ == '__main__':
+    import atexit
+    @atexit.register
+    def cleanup():
+        """应用退出时清理资源"""
+        logger.info("正在关闭应用...")
+        pool_manager.shutdown()
     # 运行应用
     host = config.get('flask', {}).get('host', '127.0.0.1')
     port = config.get('flask', {}).get('port', 5000)

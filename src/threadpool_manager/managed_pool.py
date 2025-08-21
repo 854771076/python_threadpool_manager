@@ -84,7 +84,7 @@ class ManagedThreadPool:
             
            
             
-            return task_id
+            return task_id,future
     
     def get_task(self, task_id: str) -> Optional[ManagedTask]:
         """

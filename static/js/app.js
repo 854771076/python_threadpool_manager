@@ -310,7 +310,7 @@ class ThreadPoolManager {
                 <div class="mt-2">
                     <small class="text-muted">线程池: ${task.pool_id || '未知'}</small>
                     <br>
-                    <small class="text-muted">运行时间: ${this.formatDuration(task.duration)}</small>
+                    <small class="text-muted">运行时间: ${task.running_time}</small>
                 </div>
                 
                 ${task.result ? `

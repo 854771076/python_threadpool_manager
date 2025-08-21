@@ -185,7 +185,7 @@ class ThreadPoolManager:
         pool = self.get_pool(pool_id)
         
         with self._lock:
-            task_id = pool.submit(task_func, task_name, *args, **kwargs)
+            task_id,future = pool.submit(task_func, task_name, *args, **kwargs)
             task = pool.get_task(task_id)
             
             # 注册到全局任务表

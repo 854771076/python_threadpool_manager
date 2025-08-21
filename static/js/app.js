@@ -222,9 +222,10 @@ class ThreadPoolManager {
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h6 class="mb-0">${pool.name}</h6>
+                            <h6 class="mb-0"><span>${pool.name} </span><span class="badge bg-secondary">${pool.max_workers} 线程</span></h6>
+                            
                             <small class="text-muted">ID: ${pool.pool_id}</small>
-                            <span class="badge bg-secondary">${pool.max_workers} 线程</span>
+                            
                         </div>
                         
                     </div>
@@ -234,7 +235,7 @@ class ThreadPoolManager {
                                 <i class="bi bi-x"></i> 关闭
                             </button>
                             <button class="btn btn-sm btn-warning" onclick="threadPoolManager.cancelPoolTasks('${pool.pool_id}')">
-                                <i class="bi bi-stop"></i> 取消未执行任务
+                                <i class="bi bi-x"></i> 取消未执行任务
                             </button>
                         </div>
                 </div>

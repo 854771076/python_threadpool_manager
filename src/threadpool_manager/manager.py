@@ -277,7 +277,16 @@ class ThreadPoolManager:
             else:
                 # 获取所有任务
                 return [task for pool in self.pools.values() for task in pool.list_tasks()]
-    
+    def clear_stopped_pools(self):
+        """清理已停止的线程池"""
+        with self._lock:
+            stopped_pools = [
+                pool_id for pool_id, pool in self.pools.items()
+                if pool.status in [PoolStatus.STOPPED,PoolStatus.TERMINATED]
+            ]
+            
+            for pool_id in stopped_pools:
+                del self.pools[pool_id]
     def cleanup_completed_tasks(self) -> int:
         """
         清理已完成的任务
@@ -328,6 +337,8 @@ class ThreadPoolManager:
             while not self._stop_cleanup.wait(timeout=300):  # 每5分钟清理一次
                 try:
                     self.cleanup_completed_tasks()
+                    self.clear_stopped_pools()
+
                 except Exception as e:
                     self.logger.error(f"Error in cleanup thread: {e}")
         
